@@ -1,0 +1,65 @@
+{
+  "abi": "prg32-colophon-1.0",
+  "title": "Drumfight Napoli 97",
+  "subtitle": "Students by day, percussion warriors by night",
+  "version": "1.0.0",
+  "release_date": "2026-10-01",
+  "developer": {
+    "name": "UniParthenope PRG32",
+    "url": "https://github.com/riscv-prg32/Drumfight-napoli97"
+  },
+  "authors": [
+    {
+      "role": "concept, story, project lead",
+      "name": "Raffaele Montella - UniParthenope"
+    },
+    {
+      "role": "game design, programming, drum kit, pixel art",
+      "name": "Claude Code (Anthropic)"
+    }
+  ],
+  "license": "MIT",
+  "copyright": "Copyright 2026 PRG32",
+  "acknowledgements": [
+    "To the drummers of Piazza San Domenico Maggiore, Naples, 1997.",
+    "The story and its characters are fiction; the piazza is real.",
+    "All sounds are synthesized by the PRG32 SID-like synthesizer: no samples, no recordings.",
+    "PRG32 framework; big-title glyph shapes from the PRG32-QT host font."
+  ],
+  "content_notice": "A music game. No violence: battles are fought with rhythm.",
+  "controls": [
+    {
+      "input": "A / B",
+      "action": "Kick / snare"
+    },
+    {
+      "input": "UP + A / B",
+      "action": "Hat / open hat"
+    },
+    {
+      "input": "LEFT + A / B",
+      "action": "Tammorra / bongo"
+    },
+    {
+      "input": "RIGHT + A / B",
+      "action": "Campana / clap"
+    },
+    {
+      "input": "Hold the button",
+      "action": "Accent"
+    },
+    {
+      "input": "DOWN + A (hold) / DOWN + B",
+      "action": "Erase under the playhead / wipe the last voice"
+    },
+    {
+      "input": "DOWN, direction, A or B",
+      "action": "Special drum move (when unlocked)"
+    },
+    {
+      "input": "START",
+      "action": "Menu (title: high scores)"
+    }
+  ],
+  "start_prompt": "Press A to enter the piazza"
+}

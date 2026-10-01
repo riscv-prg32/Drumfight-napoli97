@@ -1,0 +1,86 @@
+{
+  "samples": [],
+  "instruments": [
+    {
+      "name": "KICK",
+      "sample_id": 35360,
+      "default_volume": 255,
+      "default_pan": 0,
+      "attack": 0,
+      "decay": 60,
+      "sustain": 0,
+      "release": 24
+    },
+    {
+      "name": "SNARE",
+      "sample_id": 34787,
+      "default_volume": 235,
+      "default_pan": -14,
+      "attack": 0,
+      "decay": 46,
+      "sustain": 0,
+      "release": 20
+    },
+    {
+      "name": "HAT",
+      "sample_id": 36835,
+      "default_volume": 190,
+      "default_pan": 30,
+      "attack": 0,
+      "decay": 16,
+      "sustain": 0,
+      "release": 8
+    },
+    {
+      "name": "OPEN HAT",
+      "sample_id": 36835,
+      "default_volume": 180,
+      "default_pan": 40,
+      "attack": 0,
+      "decay": 74,
+      "sustain": 0,
+      "release": 40
+    },
+    {
+      "name": "TAMMORRA",
+      "sample_id": 35552,
+      "default_volume": 245,
+      "default_pan": -40,
+      "attack": 0,
+      "decay": 64,
+      "sustain": 0,
+      "release": 30
+    },
+    {
+      "name": "BONGO",
+      "sample_id": 35602,
+      "default_volume": 220,
+      "default_pan": 20,
+      "attack": 0,
+      "decay": 34,
+      "sustain": 0,
+      "release": 16
+    },
+    {
+      "name": "CAMPANA",
+      "sample_id": 36826,
+      "default_volume": 185,
+      "default_pan": -28,
+      "attack": 0,
+      "decay": 36,
+      "sustain": 0,
+      "release": 18
+    },
+    {
+      "name": "CLAP",
+      "sample_id": 35683,
+      "default_volume": 225,
+      "default_pan": 12,
+      "attack": 0,
+      "decay": 34,
+      "sustain": 0,
+      "release": 16
+    }
+  ],
+  "tracks": []
+}
