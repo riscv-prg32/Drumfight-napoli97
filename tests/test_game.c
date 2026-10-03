@@ -176,7 +176,7 @@ static void test_practice(void) {
     restart(PRG32_FEATURE_AUDIO);
     tap(A);
     CHECK(g.state == ST_COMPOSE && g.mode == MODE_PRACTICE);
-    CHECK(g.seq.bpm == 112);
+    CHECK(seq_bpm() == 114 && !g.seq.swing && g.kit == KIT_ANALOG);
 
     /* An empty bar ticks a metronome on the campana channel. */
     host_note_count = 0;
@@ -220,13 +220,30 @@ static void test_practice(void) {
     CHECK(g.who[0].pattern.row[DF_SNARE] == 0);
     CHECK(g.who[0].score.total == 0);
 
-    /* The tempo never drifts: 8 bars at 112 BPM last 8 * 16 * 15000 / 112 ms. */
+    /* Tight timing: at 114 BPM every sixteenth is exactly four frames. */
+    wait_step(0);
+    uint32_t last = host_ms;
+    for (int step = 1; step <= 32; ++step) {
+        wait_step(step & 15);
+        CHECK(host_ms - last == 4 * 33);
+        last = host_ms;
+    }
+    /* Even when frames are irregular the tempo follows the clock, not the
+     * frame counter. */
     wait_step(0);
     uint32_t start = host_ms;
-    for (int bar = 0; bar < 8; ++bar) wait_step(0);
-    int expected = 8 * 16 * 15000 / 112;
+    for (int bar = 0; bar < 8; ++bar) {
+        for (int i = 0; i < 400; ++i) {
+            int before = g.seq.step;
+            host_input = 0;
+            drumfight_update();
+            drumfight_draw();
+            host_ms += 29 + (uint32_t)((i * 7 + bar) % 9); /* 29..37 ms frames */
+            if (g.seq.step == 0 && before != 0) break;
+        }
+    }
     int elapsed = (int)(host_ms - start);
-    CHECK(elapsed > expected - 40 && elapsed < expected + 40);
+    CHECK(elapsed > 8 * 16 * 132 - 70 && elapsed < 8 * 16 * 132 + 70);
 }
 
 static void test_moves_and_unlocks(void) {
@@ -296,12 +313,46 @@ static void test_moves_and_unlocks(void) {
     shot("menu");
     tap(DOWN);
     tap(RIGHT);
-    CHECK(g.seq.bpm == 124);
+    CHECK(seq_bpm() == 152);
     tap(LEFT);
-    CHECK(g.seq.bpm == 112);
+    tap(LEFT);
+    CHECK(seq_bpm() == 91);
+    tap(RIGHT);
+    CHECK(seq_bpm() == 114);
+
+    /* SWING: off sixteenths one frame late, the pair keeps its length. */
+    tap(DOWN);
+    tap(A);
+    CHECK(g.seq.swing && g.menu_open);
+    wait_step(0);
+    uint32_t on = host_ms;
+    wait_step(1);
+    CHECK(host_ms - on == 5 * 33);
+    wait_step(2);
+    CHECK(host_ms - on == 8 * 33);
+    tap(A);
+    CHECK(!g.seq.swing);
+
+    /* KIT: the same voice plays another instrument; the hat chokes the open hat. */
+    tap(DOWN);
+    host_note_count = 0;
+    host_stop_count = 0;
+    wait_step(0);
+    wait_step(0);
+    CHECK(host_notes[host_note_count - 1].instrument == host_notes[host_note_count - 1].channel);
+    CHECK(host_notes[host_note_count - 1].note == PCM_NOTE);
+    CHECK(host_stop_count >= 8); /* eight closed hats in the bar */
+    tap(A);
+    CHECK(g.kit == KIT_SID && g.menu_open);
+    host_note_count = 0;
+    wait_step(0);
+    wait_step(0);
+    CHECK(host_notes[host_note_count - 1].instrument == host_notes[host_note_count - 1].channel + DF_VOICES);
+    tap(RIGHT);
+    CHECK(g.kit == KIT_ANALOG);
     tap(DOWN);
     tap(DOWN);
-    CHECK(g.menu_item == 3);
+    CHECK(g.menu_item == 5);
     tap(A); /* EXIT submits the best groove of the session */
     CHECK(g.state == ST_TITLE);
     CHECK(host_score_count == 1 && host_score_last > 800);
@@ -330,7 +381,7 @@ static void test_cpu_match(void) {
     for (int round = 0; round < ROUNDS; ++round) {
         CHECK(g.state == ST_READY && g.round == round);
         tap(A);
-        CHECK(g.state == ST_COMPOSE && g.seq.bpm == ROUND_BPM[round]);
+        CHECK(g.state == ST_COMPOSE && g.seq.frames == ROUND_FRAMES[round] && g.seq.swing == ROUND_SWING[round]);
         if (round == 0) {
             /* Round 1: let the sixteen bars run out with a simple beat. */
             play_rows(ROCK);

@@ -46,10 +46,13 @@ A joystick direction plus a button is a pad:
 |---|---|
 | DOWN + A, held | Erase the selected voice under the playhead (hold a whole bar to empty it) |
 | DOWN + B | Wipe the selected voice |
-| START | Menu: resume, tempo (practice) or done (battles), clear all, exit |
+| START | Menu: resume, tempo and swing (practice) or done (battles), kit, clear all, exit |
 
-The loop keeps playing while the menu is open. While the bar is empty a quiet
-metronome marks the beats.
+![The START menu](media/menu.png)
+
+The loop keeps playing while the menu is open, so tempo, swing and kit
+(ANALOG or SID, see [audio.md](audio.md)) can be chosen by ear. While the
+bar is empty a quiet metronome marks the beats.
 
 ## Special drum moves
 
@@ -83,7 +86,7 @@ last direction.
 1. **Title**: choose a mode with UP/DOWN and A. START shows the
    scoreboard ("Legends of the piazza").
 2. **Setup** (VS CPU: opponent; PIAZZA: number of players).
-3. For each of **three rounds** (100, 112, 124 BPM):
+3. For each of **three rounds** (91 BPM, 114 BPM, 114 BPM with swing):
    - *Get ready*: the pad map; A starts.
    - *Compose*: 16 bars, starting from an empty bar. START, DONE ends early.
    - *Showcase*: every bar is played twice while the judge counts up its
@@ -95,7 +98,7 @@ last direction.
    scoreboard under the game name `drumfight`.
 
 In PRACTICE there are no rounds and no bar limit; the tempo can be changed in
-the menu (90, 100, 112, 124, 136 BPM) and the best groove of the session is
+the menu (76, 91, 114 or 152 BPM, swing on or off) and the best groove of the session is
 submitted when you exit.
 
 ## CPU opponents

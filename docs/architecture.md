@@ -53,7 +53,8 @@ that list is filled, so showcase, result and final are shared code.
 
 1. read the clock and the pad (both controllers merged), compute press
    edges;
-2. `seq_tick`: advance the sequencer clock and fire due steps
+2. `seq_tick`: advance the sequencer clock and fire due steps. The tempo
+   is a whole number of frames per sixteenth, so steps are exactly even
    ([audio.md](audio.md));
 3. play queued jingle notes; publish and collect network snapshots in
    network mode;
@@ -105,6 +106,8 @@ relocation records, linked with `-nostdlib`:
 - **Optional features only.** The image requires no feature; audio, stereo
   and multiplayer are declared optional and multiplayer is checked at run
   time through the ABI table (`df_host_features()`).
+- **Sample data lives in the AUD0 block**, not in the code image: it costs
+  package and loading-heap bytes, not executable RAM.
 
 `tools/check_relocatable.py` proves the first rule on every build: it scans
 the object for absolute relocations and links the image at two addresses,
@@ -112,12 +115,13 @@ which must give identical bytes.
 
 ## Budgets
 
-| Budget | Release 1.0.0 | Limit | Enforced by |
+| Budget | Release 1.1.0 | Limit | Enforced by |
 |---|---|---|---|
-| Code and data | 21,812 bytes | | |
-| Executable RAM (`mem`) | 22,500 bytes | 32,768 (classroom profile) | `scripts/build.sh`, `--cart-ram-kib 32` |
-| Stored package (code + audio + Store trailer) | 28,815 bytes | 65,536 | `scripts/build.sh` |
-| AUDIO block | 104 bytes | | |
+| Code and data | 22,476 bytes | | |
+| Executable RAM (`mem`) | 23,168 bytes | 32,768 (classroom profile) | `scripts/build.sh`, `--cart-ram-kib 32` |
+| AUDIO block (two kits) | 24,804 bytes | | |
+| Load image (header + code + audio) | about 47,400 bytes | about 54,500 (QEMU loading heap) | `scripts/build.sh` |
+| Stored package (code + audio + Store trailer) | 54,496 bytes | 65,536 | `scripts/build.sh` |
 
 ## Scores and status band
 

@@ -13,7 +13,7 @@ Needs a C compiler and the PRG32 checkout for its public headers
 | Suite | Checks | What it covers |
 |---|---|---|
 | `tests/test_core.c` | 744 | Pattern model; pad map; judge reference values and bounds; syncopation; every move, its motion and threshold; CPU levels over 200 seeds each; network packing under loss, repetition and reordering; ranking |
-| `tests/test_game.c` | 188 | The unmodified cartridge source against `tests/host/host_prg32.h`: title, practice (quantisation, no double trigger, accents, erase, tempo drift), unlocking and performing all eight moves, a full match against the CPU, a four-player pass-the-pad match, a three-round network battle against a simulated board, a peer that never delivers |
+| `tests/test_game.c` | 231 | The unmodified cartridge source against `tests/host/host_prg32.h`: title, practice (quantisation, no double trigger, accents, erase), the clock (steps exactly four frames apart, tempo under irregular frames, swing), kit switch and hat choke, unlocking and performing all eight moves, a full match against the CPU, a four-player pass-the-pad match, a three-round network battle against a simulated board, a peer that never delivers |
 | metadata check | | Metadata, colophon and audio JSON parse; versions agree; the multiplayer signature in the metadata equals the one in the source |
 
 The host layer also fails the run if any drawn text uses a character outside
@@ -28,8 +28,8 @@ ai level 1: mean 571, range 560..629 (target 560)
 ai level 2: mean 842, range 797..875 (target 820)
 test_core: 744 checks, 0 failures
 practice: groove 758 + moves 200 = 958, unlocked ff, used ff
-test_game: 188 checks, 0 failures
-metadata: version 1.0.0, signature drumfight-napoli97-v1, 0 failures
+test_game: 231 checks, 0 failures
+metadata: version 1.1.0, signature drumfight-napoli97-v1, 0 failures
 ```
 
 `tests/run_tests.sh shots` also writes every screen to `build/shots/*.png`
@@ -44,20 +44,23 @@ scripts/check_hosts.sh
 | Host | How | Expected |
 |---|---|---|
 | any load address | `tools/check_relocatable.py` links at two addresses | `position independent: runs unchanged at any load address` |
-| PRG32-QT emulator core | Qt-free `prg32qt-headless`, 300 frames with scripted pads; executes the real RISC-V image | `OK (300 frames) MEDIA graphics_non_black=... audio_events=...` |
-| PRG32 QEMU firmware | `scripts/qemu_preview.py --script smoke`: the firmware loads the cartridge, a scripted player drums and performs QUATTRO | `loaded cartridge 'drumfight-napoli97' (21812 bytes code, 22500 bytes memory, 104 bytes audio)` and no panic |
+| PRG32-QT emulator core | Qt-free `prg32qt-headless`, 300 frames with scripted pads; executes the real RISC-V image | `OK (300 frames) MEDIA graphics_non_black=... audio_events=... pcm_samples=...` (non-zero: the PCM kit plays) |
+| PRG32 QEMU firmware | `scripts/qemu_preview.py --script smoke`: the firmware loads the cartridge, a scripted player drums and performs QUATTRO | `loaded cartridge 'drumfight-napoli97' (22476 bytes code, 23168 bytes memory, 24804 bytes audio)` and no panic |
 
 The QEMU run also saves screenshots and the firmware's audio stream in
 `build/hosts/qemu/`.
 
-## Verified for release 1.0.0 (2026-10-01)
+## Verified for release 1.1.0 (2026-10-03)
 
 - Host tests: all pass.
 - Position independence: proven.
 - PRG32-QT (`9f49443`): both variants run.
 - PRG32 QEMU firmware (PRG32 `a8669e5`, ABI hash `0x260f6136`): loads and
-  plays; the preview session reaches a groove of 871 with seven moves;
-  audio peak -13 dBFS, no clipping.
+  plays the 24.8 KB drum kit; the preview session reaches a total of 915
+  with seven moves; audio peak -14 dBFS, no clipping, energy from 30 Hz to
+  10 kHz.
+- Drum samples: length, fundamental, spectral centroid, silent tail and DC
+  offset of each generated sample match its design ([audio.md](audio.md)).
 - Store bundle: accepted by CartridgeStore's own ingestion code
   (`212e060`), see [store_publishing.md](store_publishing.md).
 - Deterministic build: two consecutive builds give identical checksums.
@@ -69,9 +72,14 @@ cartridge hardware-proven, check on an ESP32-C6:
 
 - [ ] Frame rate while composing stays at 30 fps (the playhead redraw is two
       grid columns per step; a move repaints the grid once).
-- [ ] The kit through a real speaker: balance of the eight voices, kick
-      audible on a small speaker, hats not too dull. Tune
-      `tools/build_audio.py` and `VOICE_NOTES` / `VOICE_GAIN`.
+- [ ] The cartridge loads: header + code + audio is about 47 KB, which fits
+      the QEMU firmware's loading heap (limit about 54.5 KB); the heap of a
+      physical board has not been measured with this image.
+- [ ] The kit by ear, which has not been done on any host: timbre of each
+      ANALOG voice, balance, kick on a small speaker. Tune the formulas in
+      `tools/build_audio.py` and `VOICE_GAIN`.
+- [ ] Timing by ear: steps even at all four tempos, swing feel, pad
+      latency.
 - [ ] Stereo (PRG32 Audio Plus): voices sit where [audio.md](audio.md) says;
       mono collapse sounds balanced.
 - [ ] Pad feel: quantisation with a real joystick, accent hold time

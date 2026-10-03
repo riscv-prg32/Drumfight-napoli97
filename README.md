@@ -6,8 +6,8 @@
 
 **Drumfight Napoli 97** is a cartridge for [PRG32](https://github.com/riscv-prg32/PRG32),
 the educational ESP32-C6 / RISC-V game console. It is a drum machine you play
-like a fighting game: record a one-bar groove live on the eight voices of the
-PRG32 SID-like stereo synthesizer, unlock special drum moves with joystick
+like a fighting game: record a one-bar groove live on eight drum voices in
+stereo, unlock special drum moves with joystick
 motions, and let the piazza judge who played it better.
 
 ![Composing a groove (real QEMU firmware frame)](assets/store/screenshot.png)
@@ -22,9 +22,13 @@ motions, and let the piazza judge who played it better.
 ## The game
 
 - **A drum machine.** Eight voices by sixteen steps, looping. Kick, snare,
-  hat, open hat, tammorra, bongo, campana and clap, each on its own synth
-  channel and its own place in the stereo field. No samples: every sound is
-  synthesized.
+  hat, open hat, tammorra, bongo, campana and clap, each on its own channel
+  of the PRG32 eight-voice stereo mixer and its own place in the stereo
+  field. Steps are frame-tight, there is swing, and the closed hat chokes
+  the open hat.
+- **Two kits.** ANALOG: drum one-shots computed on the model of the classic
+  analogue drum machines (no recordings). SID: the same voices on the PRG32
+  SID-like synthesizer. Switch in the START menu.
 - **Played live.** A joystick direction plus A or B is a pad. Hits are
   recorded on the nearest sixteenth while the loop keeps playing. Hold the
   button for an accent.
@@ -40,12 +44,12 @@ motions, and let the piazza judge who played it better.
 
 | Mode | Players | What happens |
 |---|---|---|
-| PRACTICE | 1 | Free jam, any tempo, live groove meter; your best groove goes to the scoreboard |
+| PRACTICE | 1 | Free jam, four tempos, swing, live groove meter; your best groove goes to the scoreboard |
 | VS CPU | 1 | Three rounds against MATRICOLA, FUORICORSO or MAESTRO |
 | PIAZZA | 2-4, one board | Pass the pad: everyone composes in turn, the piazza ranks the bars |
 | NETWORK BATTLE | 2-4 boards | Everyone composes at the same time over the PRG32 multiplayer service |
 
-A match is three rounds at 100, 112 and 124 BPM. Each player has 16 bars to
+A match is three rounds: 91 BPM, 114 BPM, and 114 BPM with swing. Each player has 16 bars to
 build a bar; then every pattern is played back and judged.
 
 ### Controls
@@ -60,7 +64,7 @@ build a bar; then every pattern is played back and judged.
 | DOWN + A (hold) | Erase the last played voice under the playhead |
 | DOWN + B | Wipe the last played voice |
 | DOWN, direction, A or B | Special drum move (see [docs/gameplay.md](docs/gameplay.md)) |
-| START | Menu while playing; high scores on the title |
+| START | Menu while playing (tempo, swing, kit); high scores on the title |
 
 In QEMU: `W` `A` `S` `D` are the joystick, `J` is A, `K` is B, Enter is START.
 
@@ -71,7 +75,7 @@ The Store-ready cartridges are committed in [`dist/`](dist/):
 ```text
 dist/drumfight-napoli97-esp32c6.prg32      ESP32-C6 board
 dist/drumfight-napoli97-qemu.prg32         QEMU firmware
-dist/drumfight-napoli97-1.0.0-store.zip    Cartridge Store bundle (both variants)
+dist/drumfight-napoli97-1.1.0-store.zip    Cartridge Store bundle (both variants)
 dist/SHA256SUMS
 ```
 
@@ -114,9 +118,10 @@ the exact versions, every step and the expected output.
 
 | Budget | Used | Limit |
 |---|---|---|
-| Executable RAM | 22,500 bytes | 32,768 (PRG32 classroom profile; the default profile has 65,536) |
-| Stored package | 28,815 bytes | 65,536 (one cartridge slot) |
-| Store bundle | 44,019 bytes | |
+| Executable RAM | 23,168 bytes | 32,768 (PRG32 classroom profile; the default profile has 65,536) |
+| Stored package | 54,496 bytes | 65,536 (one cartridge slot) |
+| Drum kit (AUD0 block) | 24,804 bytes | |
+| Store bundle | 82,999 bytes | |
 
 ## Documentation
 
@@ -125,7 +130,7 @@ the exact versions, every step and the expected output.
 | [docs/index.md](docs/index.md) | Map of the documentation |
 | [docs/gameplay.md](docs/gameplay.md) | Modes, controls, moves, match flow |
 | [docs/judge.md](docs/judge.md) | How a groove is scored; the CPU opponents |
-| [docs/audio.md](docs/audio.md) | The eight-voice drum kit and the sequencer clock |
+| [docs/audio.md](docs/audio.md) | The two kits, how the sounds are made, the clock, swing |
 | [docs/multiplayer.md](docs/multiplayer.md) | Pass-the-pad and the network battle protocol |
 | [docs/architecture.md](docs/architecture.md) | Source layout, state machine, drawing, portability rules |
 | [docs/testing.md](docs/testing.md) | What is tested, on which hosts, and what is not |
@@ -134,11 +139,17 @@ the exact versions, every step and the expected output.
 
 ## Status
 
-Release 1.0.0. Verified by host tests, on the PRG32-QT emulator core and on
-the PRG32 QEMU firmware. **Not yet verified on a physical ESP32-C6**: frame
-rate on the SPI display, the sound of the kit through a real speaker, stereo
-separation, and a network battle between real boards are open acceptance
-items, listed in [docs/testing.md](docs/testing.md).
+Release 1.1.0 (see [CHANGELOG.md](CHANGELOG.md)). Verified by host tests,
+on the PRG32-QT emulator core and on the PRG32 QEMU firmware. **Not yet
+verified on a physical ESP32-C6**: frame rate on the SPI display, stereo
+separation and a network battle between real boards are open acceptance
+items, listed in [docs/testing.md](docs/testing.md). The drum kit was
+designed and checked by measurement; nobody has listened to it yet. To hear
+it without a board:
+
+```bash
+python3 tools/build_audio.py --demo build/kit-demo.wav
+```
 
 ## Credits and license
 

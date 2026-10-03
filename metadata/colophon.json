@@ -2,8 +2,8 @@
   "abi": "prg32-colophon-1.0",
   "title": "Drumfight Napoli 97",
   "subtitle": "Students by day, percussion warriors by night",
-  "version": "1.0.0",
-  "release_date": "2026-10-01",
+  "version": "1.1.0",
+  "release_date": "2026-10-03",
   "developer": {
     "name": "UniParthenope PRG32",
     "url": "https://github.com/riscv-prg32/Drumfight-napoli97"
@@ -23,7 +23,7 @@
   "acknowledgements": [
     "To the drummers of Piazza San Domenico Maggiore, Naples, 1997.",
     "The story and its characters are fiction; the piazza is real.",
-    "All sounds are synthesized by the PRG32 SID-like synthesizer: no samples, no recordings.",
+    "Every drum sound is computed from formulas (tools/build_audio.py) or by the PRG32 SID-like synthesizer: no recordings, no samples of instruments or machines.",
     "PRG32 framework; big-title glyph shapes from the PRG32-QT host font."
   ],
   "content_notice": "A music game. No violence: battles are fought with rhythm.",
@@ -58,7 +58,7 @@
     },
     {
       "input": "START",
-      "action": "Menu (title: high scores)"
+      "action": "Menu: tempo, swing, kit (title: high scores)"
     }
   ],
   "start_prompt": "Press A to enter the piazza"

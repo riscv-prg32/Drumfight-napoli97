@@ -19,6 +19,7 @@ prg32_repo="$(cd "${PRG32_REPO:-"$repo_dir/../PRG32"}" && pwd)"
 name="drumfight-napoli97"
 cart_ram_kib=32          # fits the PRG32 classroom profile (and the 64 KiB default)
 package_limit=65536      # one cartridge slot: code + audio + Store trailer
+load_limit=54500         # measured QEMU limit for header + code/data + audio
 
 if ! command -v riscv32-esp-elf-gcc >/dev/null 2>&1; then
   # The toolchain alone is enough; prefer it to the whole ESP-IDF environment.
@@ -45,10 +46,10 @@ mkdir -p "$build_dir" "$dist_dir"
 
 prg32() { (cd "$prg32_repo" && python3 -m prg32 "$@"); }
 
-# 1. Regenerate the drum kit (deterministic; the result is committed).
+# 1. Regenerate the drum kits (deterministic; the results are committed).
 python3 "$repo_dir/tools/build_audio.py"
 
-# 2. AUDIO block: eight procedural instruments, no PCM, no tracks.
+# 2. AUDIO block: eight PCM one-shots, sixteen instruments, no tracks.
 python3 "$prg32_repo/tools/prg32audio_pack.py" "$repo_dir/audio/audio.json" \
   --out "$build_dir/audio.block"
 
@@ -74,7 +75,10 @@ for arch in "${archs[@]}"; do
     --audio-block "$build_dir/audio.block" \
     --out "$raw" | tee "$log" | grep -E "code=|error" || true
   sizes="$(grep -o 'code=[0-9]* mem=[0-9]* audio=[0-9]*' "$log" | tail -1)"
+  code="$(sed -E 's/code=([0-9]+).*/\1/' <<< "$sizes")"
   mem="$(sed -E 's/.*mem=([0-9]+).*/\1/' <<< "$sizes")"
+  audio="$(sed -E 's/.*audio=([0-9]+)/\1/' <<< "$sizes")"
+  load=$(( code + audio + 128 ))
 
   # 5. Store trailer: metadata, icon, screenshot and colophon.
   prg32 store attach-metadata "$raw" --out "$out" \
@@ -85,9 +89,10 @@ for arch in "${archs[@]}"; do
     --architecture "$arch" >/dev/null
 
   size=$(wc -c < "$out" | tr -d ' ')
-  echo "$out: package $size/$package_limit, RAM $mem/$(( cart_ram_kib * 1024 ))"
+  echo "$out: package $size/$package_limit, RAM $mem/$(( cart_ram_kib * 1024 )), load ~$load/$load_limit"
   (( size <= package_limit )) || { echo "error: package too large" >&2; exit 1; }
   (( mem <= cart_ram_kib * 1024 )) || { echo "error: executable RAM exceeded" >&2; exit 1; }
+  (( load <= load_limit )) || { echo "error: load image too large for QEMU" >&2; exit 1; }
 done
 
 # 6. Inspect what was produced.

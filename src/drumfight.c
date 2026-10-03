@@ -5,12 +5,14 @@
  * San Domenico, university students by day became percussion warriors by
  * night... The rest of the story? Pure legend!"
  *
- * The game is a drum machine: an eight-voice, sixteen-step loop played on
- * the PRG32 SID-like stereo synthesizer. Players record a bar live with the
- * joystick and the A/B buttons, unlock special drum moves with joystick
- * motions, and a judge scores the groove. Modes: practice, one CPU
- * opponent, pass-the-pad for 2-4 players, and a network battle for up to
- * four boards.
+ * The game is a drum machine: an eight-voice, sixteen-step loop on the
+ * PRG32 eight-voice stereo mixer, with a kit of analogue-style drum
+ * one-shots (or, as an alternative, the SID-like synthesizer), a clock
+ * locked to the frame so every step is even, swing, accents and a choking
+ * hi-hat. Players record a bar live with the joystick and the A/B buttons,
+ * unlock special drum moves with joystick motions, and a judge scores the
+ * groove. Modes: practice, one CPU opponent, pass-the-pad for 2-4 players,
+ * and a network battle for up to four boards.
  *
  * This file is the whole cartridge: state machine, sequencer, input, audio
  * and drawing. The rules live in df_core.h, which has no PRG32 calls and is
@@ -87,7 +89,7 @@ void *memcpy(void *dst, const void *src, size_t n) {
 #define MOVES_Y 150
 #define HELP_Y 192
 
-#define STEP_UNITS 15000u  /* ms * bpm in one sixteenth note */
+#define FRAME_MS 33          /* the firmware calls update and draw every 33 ms */
 #define ROUNDS 3
 #define COMPOSE_BARS 16
 #define SHOW_BARS 2
@@ -133,12 +135,26 @@ static const uint16_t VOICE_COLORS[DF_VOICES] = {
     RGB(236, 64, 64),  RGB(255, 150, 40), RGB(250, 226, 60), RGB(170, 232, 70),
     RGB(60, 210, 130), RGB(70, 220, 230), RGB(70, 150, 255), RGB(236, 110, 220),
 };
-/* MIDI notes: pitch for the tonal voices, noise clock for the noise ones. */
-static const uint8_t VOICE_NOTES[DF_VOICES] = {36, 106, 127, 124, 45, 64, 81, 112};
-static const uint8_t VOICE_GAIN[DF_VOICES] = {100, 92, 74, 70, 96, 86, 72, 88};
+/* Two kits (audio/audio.json): ANALOG, PCM one-shots on instruments 0..7,
+ * and SID, procedural instruments 8..15. A PCM voice plays at its natural
+ * speed on note 60. For the SID kit the note is the pitch of a tonal voice
+ * or the clock of a noise voice. */
+#define KIT_ANALOG 0
+#define KIT_SID 1
+#define PCM_NOTE 60
+static const char KIT_NAMES[2][7] = {"ANALOG", "SID"};
+static const uint8_t SID_NOTES[DF_VOICES] = {36, 106, 127, 124, 45, 64, 81, 112};
+static const uint8_t VOICE_GAIN[2][DF_VOICES] = {
+    {100, 96, 78, 72, 92, 82, 76, 90},
+    {100, 92, 74, 70, 96, 86, 72, 88},
+};
 static const uint8_t LEVEL_VOLUME[4] = {0, 112, 188, 255};
-static const uint8_t ROUND_BPM[ROUNDS] = {100, 112, 124};
-static const uint8_t PRACTICE_BPM[5] = {90, 100, 112, 124, 136};
+/* Tempo is a whole number of frames per sixteenth, so every step lands on
+ * a frame and the groove is perfectly even: 6, 5, 4, 3 frames are 76, 91,
+ * 114 and 152 BPM. Swing delays every off sixteenth by one frame. */
+static const uint8_t ROUND_FRAMES[ROUNDS] = {5, 4, 4};
+static const uint8_t ROUND_SWING[ROUNDS] = {0, 0, 1};
+static const uint8_t PRACTICE_FRAMES[4] = {6, 5, 4, 3};
 
 /* 5x7 capitals and digits for the big titles (the glyph shapes are those
  * of the PRG32-QT host font, MIT, PRG32 contributors). Digits, then A-Z;
@@ -183,8 +199,9 @@ typedef struct {
 } contestant_t;
 
 typedef struct {
-    uint16_t bpm;
-    uint32_t acc;            /* ms * bpm accumulated towards the next step */
+    uint8_t frames;          /* frames per sixteenth: the tempo */
+    uint8_t swing;           /* off sixteenths are one frame late */
+    int32_t acc;             /* ms since the last step */
     uint8_t step;            /* step that fired last */
     uint8_t running;
     int16_t bar;             /* bar being played, 0-based */
@@ -208,7 +225,8 @@ static struct {
 
     /* menus */
     uint8_t title_item, setup_item, menu_open, menu_item;
-    uint8_t cpu_level, piazza_players, practice_tempo;
+    uint8_t cpu_level, piazza_players, practice_tempo, practice_swing;
+    uint8_t kit;              /* KIT_ANALOG or KIT_SID */
 
     /* match */
     contestant_t who[MAX_CONTESTANTS];
@@ -329,18 +347,24 @@ static void pad_legend(int x, int y, int voice, uint16_t fg, uint16_t bg) {
 /* Audio                                                               */
 /* ------------------------------------------------------------------ */
 
-/* Voice v plays instrument v on synth channel v, so all eight voices of
- * the synthesizer can sound together. Stereo positions come from the
- * instrument defaults in audio/audio.json. */
+/* Voice v plays on mixer channel v, with the instrument of the selected
+ * kit, so all eight voices can sound together and a new hit cuts only its
+ * own voice. Stereo positions are the instrument defaults in
+ * audio/audio.json. See docs/audio.md. */
 static void drum(int voice, int level) {
-    unsigned volume = (unsigned)LEVEL_VOLUME[level & 3] * VOICE_GAIN[voice] / 100u;
+    unsigned volume = (unsigned)LEVEL_VOLUME[level & 3] * VOICE_GAIN[g.kit][voice] / 100u;
     if (g.soft) volume = volume * 2u / 3u;
     if (volume == 0) return;
-    prg32_audio_note_on_pan((uint8_t)voice, (uint8_t)voice, VOICE_NOTES[voice], (uint8_t)volume,
+    /* A closed hat chokes a ringing open hat, as on every drum machine. */
+    if (voice == DF_HAT) prg32_audio_stop_channel(DF_OPEN);
+    prg32_audio_note_on_pan((uint8_t)voice, (uint8_t)(voice + g.kit * DF_VOICES),
+                            g.kit == KIT_SID ? SID_NOTES[voice] : PCM_NOTE, (uint8_t)volume,
                             PRG32_AUDIO_PAN_CENTER);
     g.flash[voice] = 3;
 }
 
+/* Interface sounds are short tunes on the ANALOG kit; the note transposes
+ * the sample (60 is its natural pitch). */
 static void jingle(int delay, int voice, int note, int volume) {
     for (unsigned i = 0; i < sizeof(g.jingles) / sizeof(g.jingles[0]); ++i) {
         if (g.jingles[i].volume == 0) {
@@ -366,30 +390,30 @@ static void jingles_tick(void) {
     }
 }
 
-static void sfx_move(void) { jingle(0, DF_CAMPANA, 88, 150); }
+static void sfx_move(void) { jingle(0, DF_CAMPANA, 72, 120); }
 static void sfx_select(void) {
-    jingle(0, DF_CAMPANA, 81, 170);
-    jingle(2, DF_CAMPANA, 88, 170);
+    jingle(0, DF_CAMPANA, 60, 150);
+    jingle(2, DF_CAMPANA, 67, 150);
 }
-static void sfx_back(void) { jingle(0, DF_BONGO, 57, 170); }
+static void sfx_back(void) { jingle(0, DF_BONGO, 53, 170); }
 static void sfx_unlock(void) {
-    jingle(0, DF_CAMPANA, 76, 190);
-    jingle(2, DF_CAMPANA, 81, 190);
-    jingle(4, DF_CAMPANA, 88, 210);
+    jingle(0, DF_CAMPANA, 60, 170);
+    jingle(2, DF_CAMPANA, 64, 170);
+    jingle(4, DF_CAMPANA, 67, 190);
 }
 static void sfx_special(void) {
-    jingle(0, DF_BONGO, 64, 220);
-    jingle(1, DF_BONGO, 69, 220);
-    jingle(2, DF_BONGO, 76, 240);
+    jingle(0, DF_BONGO, 60, 220);
+    jingle(2, DF_BONGO, 65, 220);
+    jingle(4, DF_BONGO, 72, 240);
 }
-static void sfx_locked(void) { jingle(0, DF_TAMMORRA, 36, 170); }
+static void sfx_locked(void) { jingle(0, DF_TAMMORRA, 53, 170); }
 static void sfx_fanfare(void) {
-    jingle(0, DF_CAMPANA, 76, 220);
-    jingle(3, DF_CAMPANA, 81, 220);
-    jingle(6, DF_CAMPANA, 85, 220);
-    jingle(9, DF_CAMPANA, 88, 250);
-    jingle(9, DF_OPEN, 124, 230);
-    jingle(9, DF_KICK, 36, 250);
+    jingle(0, DF_CAMPANA, 60, 200);
+    jingle(3, DF_CAMPANA, 64, 200);
+    jingle(6, DF_CAMPANA, 67, 200);
+    jingle(9, DF_CAMPANA, 72, 220);
+    jingle(9, DF_OPEN, PCM_NOTE, 200);
+    jingle(9, DF_KICK, PCM_NOTE, 250);
 }
 
 /* ------------------------------------------------------------------ */
@@ -402,12 +426,29 @@ static int pattern_empty(const df_pattern_t *p) {
     return any == 0;
 }
 
-static void seq_start(const df_pattern_t *pattern, const df_score_t *score, int bpm) {
+/* Milliseconds from the step that fired last to the next one. With swing
+ * the gap after an on sixteenth is one frame longer and the gap after an
+ * off sixteenth one frame shorter: the pair keeps its length. */
+static int32_t seq_gap(void) {
+    int32_t gap = g.seq.frames * FRAME_MS;
+    if (g.seq.swing) gap += (g.seq.step & 1) ? -FRAME_MS : FRAME_MS;
+    return gap;
+}
+
+/* The tempo a number of frames per sixteenth amounts to, rounded. */
+static int frames_bpm(int frames) {
+    return (15000 + frames * FRAME_MS / 2) / (frames * FRAME_MS);
+}
+
+static int seq_bpm(void) { return frames_bpm(g.seq.frames); }
+
+static void seq_start(const df_pattern_t *pattern, const df_score_t *score, int frames, int swing) {
     g.view = pattern;
     g.view_score = score;
-    g.seq.bpm = (uint16_t)bpm;
-    g.seq.acc = STEP_UNITS; /* the first step fires on the next update */
+    g.seq.frames = (uint8_t)frames;
+    g.seq.swing = (uint8_t)swing;
     g.seq.step = DF_STEPS - 1;
+    g.seq.acc = seq_gap() - FRAME_MS; /* the first step fires on the next update */
     g.seq.bar = -1;
     g.seq.running = 1;
     g.head_shown = 0xff;
@@ -428,18 +469,21 @@ static void seq_fire(void) {
     }
     /* A quiet metronome keeps the tempo audible over an empty bar. */
     if (g.state == ST_COMPOSE && (step & 3) == 0 && pattern_empty(g.view)) {
-        prg32_audio_note_on_pan(DF_CAMPANA, DF_CAMPANA, step == 0 ? 93 : 88, 96, PRG32_AUDIO_PAN_CENTER);
+        prg32_audio_note_on_pan(DF_CAMPANA, DF_CAMPANA, step == 0 ? 72 : 67, 96, PRG32_AUDIO_PAN_CENTER);
     }
     g.draw |= DR_HEAD | DR_PADS;
 }
 
-/* Advance by `dt` ms. Steps are scheduled on an exact fractional clock, so
- * the tempo never drifts even though steps fire on frame boundaries. */
+/* Advance by `dt` ms. A step fires on the frame nearest to its time. As a
+ * gap is a whole number of frames, that is the same frame count every
+ * time: no step is ever a frame early or late against its neighbours. The
+ * clock is still the millisecond clock, so a slow frame cannot slow the
+ * tempo down. */
 static void seq_tick(uint32_t dt) {
     if (!g.seq.running) return;
-    g.seq.acc += dt * g.seq.bpm;
-    for (int guard = 0; guard < 2 && g.seq.acc >= STEP_UNITS; ++guard) {
-        g.seq.acc -= STEP_UNITS;
+    g.seq.acc += (int32_t)dt;
+    for (int guard = 0; guard < 2 && g.seq.acc + FRAME_MS / 2 >= seq_gap(); ++guard) {
+        g.seq.acc -= seq_gap();
         g.seq.step = (uint8_t)((g.seq.step + 1) & 15);
         if (g.seq.step == 0) {
             ++g.seq.bar;
@@ -447,7 +491,7 @@ static void seq_tick(uint32_t dt) {
         }
         seq_fire();
     }
-    if (g.seq.acc >= STEP_UNITS * 2u) g.seq.acc = STEP_UNITS; /* after a long stall */
+    if (g.seq.acc > 2 * seq_gap()) g.seq.acc = 0; /* after a long stall */
 }
 
 /* ------------------------------------------------------------------ */
@@ -501,7 +545,7 @@ static void contestant_reset(contestant_t *c, int kind) {
 
 static void enter_title(void) {
     g.soft = 1;
-    seq_start(&g.demo, &g.demo_score, 104);
+    seq_start(&g.demo, &g.demo_score, 4, 1);
     set_state(ST_TITLE);
     prg32_band_set_game_info("DRUMFIGHT NAPOLI 97");
 }
@@ -520,8 +564,11 @@ static void compose_begin(void) {
     g.erasing = 0;
     g.hold_button = 0;
     g.soft = 0;
-    int bpm = g.mode == MODE_PRACTICE ? PRACTICE_BPM[g.practice_tempo] : ROUND_BPM[g.round];
-    seq_start(&c->pattern, &c->score, bpm);
+    if (g.mode == MODE_PRACTICE) {
+        seq_start(&c->pattern, &c->score, PRACTICE_FRAMES[g.practice_tempo], g.practice_swing);
+    } else {
+        seq_start(&c->pattern, &c->score, ROUND_FRAMES[g.round], ROUND_SWING[g.round]);
+    }
     set_state(ST_COMPOSE);
 }
 
@@ -548,7 +595,7 @@ static void show_begin(int index) {
     g.soft = 0;
     g.shown_total = 0;
     g.show_start = g.now;
-    seq_start(&c->pattern, &c->score, ROUND_BPM[g.round]);
+    seq_start(&c->pattern, &c->score, ROUND_FRAMES[g.round], ROUND_SWING[g.round]);
     set_state(ST_SHOW);
 }
 
@@ -804,7 +851,7 @@ static void pattern_changed(int voice, int step) {
 /* The step a live hit belongs to: the one that just fired or, in the
  * second half of the gap, the one about to fire. */
 static int live_step(int *early) {
-    *early = g.seq.acc * 2u >= STEP_UNITS;
+    *early = g.seq.acc * 2 >= seq_gap();
     return *early ? (g.seq.step + 1) & 15 : g.seq.step;
 }
 
@@ -960,17 +1007,26 @@ static void compose_update(uint32_t pressed) {
     if (g.mode != MODE_PRACTICE && g.seq.bar >= COMPOSE_BARS) compose_finished();
 }
 
-/* START menu while composing. The loop keeps playing underneath. */
-static int menu_count(void) { return 4; }
+/* START menu while composing. The loop keeps playing underneath, so the
+ * tempo, the swing and the kit can be changed by ear. */
+enum { MI_RESUME, MI_TEMPO, MI_SWING, MI_DONE, MI_KIT, MI_CLEAR, MI_EXIT };
 
-static void menu_label(int item, char *out) {
-    if (item == 0) put_str(out, "RESUME");
-    else if (item == 1) {
-        if (g.mode == MODE_PRACTICE) {
-            char *end = put_str(out, "TEMPO ");
-            put_str(put_num(end, PRACTICE_BPM[g.practice_tempo], 3, ' '), " BPM");
-        } else put_str(out, "DONE - PLAY IT");
-    } else if (item == 2) put_str(out, "CLEAR ALL");
+static int menu_count(void) { return g.mode == MODE_PRACTICE ? 6 : 5; }
+
+static int menu_id(int index) {
+    static const uint8_t practice[6] = {MI_RESUME, MI_TEMPO, MI_SWING, MI_KIT, MI_CLEAR, MI_EXIT};
+    static const uint8_t battle[5] = {MI_RESUME, MI_DONE, MI_KIT, MI_CLEAR, MI_EXIT};
+    return g.mode == MODE_PRACTICE ? practice[index] : battle[index];
+}
+
+static void menu_label(int id, char *out) {
+    if (id == MI_RESUME) put_str(out, "RESUME");
+    else if (id == MI_TEMPO) {
+        put_str(put_num(put_str(out, "TEMPO "), (uint32_t)seq_bpm(), 3, ' '), " BPM");
+    } else if (id == MI_SWING) put_str(out, g.seq.swing ? "SWING ON" : "SWING OFF");
+    else if (id == MI_DONE) put_str(out, "DONE - PLAY IT");
+    else if (id == MI_KIT) put_str(put_str(out, "KIT "), KIT_NAMES[g.kit]);
+    else if (id == MI_CLEAR) put_str(out, "CLEAR ALL");
     else put_str(out, g.mode == MODE_PRACTICE ? "EXIT" : "QUIT MATCH");
 }
 
@@ -991,25 +1047,32 @@ static void menu_update(uint32_t pressed) {
         g.draw |= DR_MENU;
         sfx_move();
     }
-    int tempo_step = 0;
-    if (g.menu_item == 1 && g.mode == MODE_PRACTICE) {
-        if (pressed & (PRG32_BTN_RIGHT | PRG32_BTN_A)) tempo_step = 1;
-        if (pressed & PRG32_BTN_LEFT) tempo_step = 4;
-    }
-    if (tempo_step) {
-        g.practice_tempo = (uint8_t)((g.practice_tempo + tempo_step) % 5);
-        g.seq.bpm = PRACTICE_BPM[g.practice_tempo];
-        g.draw |= DR_MENU;
+    int id = menu_id(g.menu_item);
+    /* Settings change with LEFT, RIGHT or A and keep the menu open. */
+    int turn = 0;
+    if (pressed & (PRG32_BTN_RIGHT | PRG32_BTN_A)) turn = 1;
+    if (pressed & PRG32_BTN_LEFT) turn = -1;
+    if (turn && (id == MI_TEMPO || id == MI_SWING || id == MI_KIT)) {
+        if (id == MI_TEMPO) {
+            g.practice_tempo = (uint8_t)((g.practice_tempo + 4 + turn) % 4);
+            g.seq.frames = PRACTICE_FRAMES[g.practice_tempo];
+        } else if (id == MI_SWING) {
+            g.practice_swing ^= 1;
+            g.seq.swing = g.practice_swing;
+        } else {
+            g.kit ^= 1;
+        }
+        g.draw |= DR_MENU | DR_STATUS;
         sfx_move();
         return;
     }
     if (!(pressed & PRG32_BTN_A)) return;
     sfx_select();
-    if (g.menu_item == 0) {
+    if (id == MI_RESUME) {
         menu_close();
-    } else if (g.menu_item == 1) {
+    } else if (id == MI_DONE) {
         compose_finished();
-    } else if (g.menu_item == 2) {
+    } else if (id == MI_CLEAR) {
         df_clear(&c->pattern);
         cells_dirty_all();
         rejudge();
@@ -1112,6 +1175,8 @@ void drumfight_init(void) {
     g.cpu_level = 0;
     g.piazza_players = 2;
     g.practice_tempo = 2;
+    g.practice_swing = 0;
+    g.kit = KIT_ANALOG;
     g.head_shown = 0xff;
     /* The title groove: what the MAESTRO would play. Fixed seed, so the
      * attract loop is the same on every board. */
@@ -1202,7 +1267,8 @@ static void draw_status(void) {
     char *end;
     prg32_gfx_rect(0, 0, PRG32_GAME_W, 10, C_PANEL);
     if (g.mode == MODE_PRACTICE) {
-        text(2, 1, "PRACTICE", C_GOLD, C_PANEL);
+        put_str(put_str(line, "PRACTICE "), KIT_NAMES[g.kit]);
+        text(2, 1, line, C_GOLD, C_PANEL);
     } else {
         end = put_str(line, "R");
         end = put_num(end, (uint32_t)(g.round + 1), 1, ' ');
@@ -1211,12 +1277,13 @@ static void draw_status(void) {
         text(2, 1, line, C_GOLD, C_PANEL);
     }
     end = put_str(line, "BPM ");
-    end = put_num(end, g.seq.bpm, 3, ' ');
+    end = put_num(end, (uint32_t)seq_bpm(), 3, ' ');
+    if (g.seq.swing) end = put_str(end, " SW");
     int bar = g.seq.bar < 0 ? 0 : g.seq.bar;
     if (g.state == ST_SHOW) {
         put_str(end, "  SHOWCASE");
     } else if (g.mode == MODE_PRACTICE) {
-        end = put_str(end, "  BAR ");
+        end = put_str(end, " BAR ");
         put_num(end, (uint32_t)(bar % 1000 + 1), 3, ' ');
     } else {
         end = put_str(end, " BAR ");
@@ -1297,14 +1364,15 @@ static void draw_banner(void) {
 
 static void draw_menu(void) {
     char label[24];
-    prg32_gfx_rect(76, 44, 168, 66, C_GOLD);
-    prg32_gfx_rect(78, 46, 164, 62, C_PANEL);
-    text_center(50, "DRUM BREAK", C_GOLD, C_PANEL);
+    int height = 24 + menu_count() * 11;
+    prg32_gfx_rect(76, 30, 168, height + 4, C_GOLD);
+    prg32_gfx_rect(78, 32, 164, height, C_PANEL);
+    text_center(36, "DRUM BREAK", C_GOLD, C_PANEL);
     for (int i = 0; i < menu_count(); ++i) {
         int selected = i == g.menu_item;
-        menu_label(i, label);
-        prg32_gfx_rect(82, 62 + i * 11, 156, 10, selected ? C_AZZURRO : C_PANEL);
-        text(92, 63 + i * 11, label, selected ? C_WHITE : C_TEXT, selected ? C_AZZURRO : C_PANEL);
+        menu_label(menu_id(i), label);
+        prg32_gfx_rect(82, 48 + i * 11, 156, 10, selected ? C_AZZURRO : C_PANEL);
+        text(92, 49 + i * 11, label, selected ? C_WHITE : C_TEXT, selected ? C_AZZURRO : C_PANEL);
     }
 }
 
@@ -1427,7 +1495,7 @@ static void draw_setup(void) {
         big_center(10, g.mode == MODE_CPU ? "VS CPU" : "PIAZZA", 3, C_GOLD);
         text_center(40, g.mode == MODE_CPU ? "WHO DARES TO CHALLENGE YOU?" : "HOW MANY DRUMMERS PASS THE PAD?",
                     C_TEXT, C_BG);
-        text_center(174, "3 ROUNDS: 100, 112 AND 124 BPM", C_DIM, C_PANEL);
+        text_center(174, "3 ROUNDS: 91, 114 AND 114 SWING BPM", C_DIM, C_PANEL);
         text_center(186, "A: START   B: BACK", C_GOLD, C_PANEL);
         g.draw |= DR_MENU;
     }
@@ -1464,8 +1532,8 @@ static void draw_ready(void) {
     end = put_str(line, "ROUND ");
     end = put_num(end, (uint32_t)(g.round + 1), 1, ' ');
     end = put_str(end, " OF 3 - ");
-    end = put_num(end, ROUND_BPM[g.round], 3, ' ');
-    put_str(end, " BPM");
+    end = put_num(end, (uint32_t)frames_bpm(ROUND_FRAMES[g.round]), 3, ' ');
+    put_str(end, ROUND_SWING[g.round] ? " BPM SWING" : " BPM");
     text_center(4, line, C_DIM, C_BG);
     big_center(18, composer()->name, 3, C_GOLD);
     text_center(46, "16 BARS TO BUILD YOUR GROOVE", C_TEXT, C_BG);

@@ -79,7 +79,8 @@ There is no host; the rules are symmetric.
 | Showcase, result | As in the other modes, local player first |
 | Next round | A on the result screen is the ready signal for the next lobby; a peer already waiting there still counts as done for the previous round |
 
-Boards do not share a clock: each loops at the round's tempo on its own, and
+Boards do not share a clock: each loops at the round's tempo on its own
+(and with the kit its player chose), and
 a few hundred milliseconds between boards do not matter because only
 finished bars are compared.
 

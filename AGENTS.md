@@ -25,13 +25,18 @@ fiction; do not present it as history.
   `arrow()`.
 - **Draw only what changed.** Add a `DR_*` request instead of clearing the
   screen; the SPI display pays for the bounding box of every frame.
-- **Voice n = instrument n = channel n.** Keep all eight; sound design is
-  `tools/build_audio.py` (generates `audio/audio.json`) plus `VOICE_NOTES`
-  and `VOICE_GAIN`.
+- **Voice n = channel n; instrument n (ANALOG kit) or n + 8 (SID kit).**
+  Keep all eight. Sound design is `tools/build_audio.py`, which computes
+  the PCM one-shots and `audio/audio.json` from formulas, plus `VOICE_GAIN`
+  and `SID_NOTES`. Never add recorded or third-party samples. The AUD0
+  block must keep the load image under the limit `scripts/build.sh` checks.
+- **Tempo is a whole number of 33 ms frames per sixteenth** (and swing is
+  one frame). Do not add tempos in BPM: uneven steps are the one thing a
+  drum machine must not have.
 - **A change to the pattern format, snapshot layout, judge or moves must
   bump the multiplayer signature** in `src/drumfight.c` and
   `metadata/metadata.json`.
-- **Committed build inputs:** `audio/audio.json`, `assets/store/*`,
+- **Committed build inputs:** `audio/*.raw`, `audio/audio.json`, `assets/store/*`,
   `tests/host/font8.h`. Committed build outputs: `dist/*.prg32`, the Store
   bundle and `dist/SHA256SUMS`; rebuild them whenever source, metadata or
   assets change.

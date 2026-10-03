@@ -56,7 +56,7 @@ MOVES = {
     "tammurriata": (("down", "left"), "b"), "eco": (("down", "up"), "b"),
     "ritornello": (("down", "up", "down"), "b"), "vesuvio": (("down", "up", "down"), "a"),
 }
-BEAT = 60.0 / 112.0  # practice mode starts at 112 BPM
+BEAT = 4 * 4 * 0.033  # practice mode starts at 114 BPM: four 33 ms frames per sixteenth
 
 
 def groove(bars: int, voices: dict[str, tuple[float, ...]]) -> list:

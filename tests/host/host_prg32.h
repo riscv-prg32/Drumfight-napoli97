@@ -63,6 +63,12 @@ void prg32_audio_note_on_pan(uint8_t channel, uint8_t instrument, uint8_t note, 
     }
 }
 
+static int host_stop_count;
+void prg32_audio_stop_channel(int channel) {
+    (void)channel;
+    ++host_stop_count;
+}
+
 void prg32_gfx_rect(int x, int y, int w, int h, uint16_t color) {
     for (int py = y; py < y + h; ++py) {
         if (py < 0 || py >= PRG32_GAME_H) continue;

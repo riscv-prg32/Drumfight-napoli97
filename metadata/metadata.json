@@ -2,9 +2,9 @@
   "abi": "prg32-metadata-1.0",
   "id": "org.riscv-prg32.drumfight-napoli97",
   "title": "Drumfight Napoli 97",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "summary": "A drum machine battle in Naples, 1997: record a groove, unlock special moves, win the piazza.",
-  "description": "During the magical nights of 1997, in the heart of downtown at Piazza San Domenico, university students by day became percussion warriors by night... The rest of the story? Pure legend! Drumfight Napoli 97 is a drum machine you play like a fighting game. Record a one-bar loop live on eight voices of the PRG32 SID-like stereo synthesizer (kick, snare, hats, tammorra, bongo, campana, clap) with the joystick and the A/B buttons, raise your groove to unlock eight special drum moves performed with joystick motions, and let the piazza judge pulse, variety, balance, syncopation, dynamics and structure. Practice alone, challenge one of three CPU opponents, pass the pad among 2-4 players, or battle up to four boards over the PRG32 multiplayer service.",
+  "description": "During the magical nights of 1997, in the heart of downtown at Piazza San Domenico, university students by day became percussion warriors by night... The rest of the story? Pure legend! Drumfight Napoli 97 is a drum machine you play like a fighting game. Record a one-bar loop live on eight voices (kick, snare, hats, tammorra, bongo, campana, clap) with the joystick and the A/B buttons, with frame-tight timing, swing, accents and a choking hi-hat. Two kits: ANALOG, one-shots synthesized on the model of the classic analogue drum machines, and SID, on the PRG32 SID-like synthesizer; both play on the eight-voice stereo mixer. Raise your groove to unlock eight special drum moves performed with joystick motions, and let the piazza judge pulse, variety, balance, syncopation, dynamics and structure. Practice alone, challenge one of three CPU opponents, pass the pad among 2-4 players, or battle up to four boards over the PRG32 multiplayer service.",
   "authors": [
     {
       "name": "Raffaele Montella",
@@ -28,7 +28,7 @@
     "education"
   ],
   "created_at": "2026-10-01T00:00:00Z",
-  "updated_at": "2026-10-01T00:00:00Z",
+  "updated_at": "2026-10-03T00:00:00Z",
   "runtime": {
     "platform": "PRG32",
     "isa": "RV32IMC",
